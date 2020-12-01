@@ -1,0 +1,75 @@
+#+TITLE: Simple human-based identity verification (idverify)
+
+* Main idea
+a quick moderate-strength authentication for use by Humans
+
+* Main goals
+  - deniability
+    - nobody should be able to prove whether or not an authentication event succeeded
+    - even if private keys are obtained for one or both parties
+  - human-friendliness
+    - the authentication process itself should involve minimal hassle
+    - two people should be able to verify each other in a minimal amount of time
+  - security
+    - an attacker should need approaching impossible amounts of effort to defeat
+      the scheme
+
+* Main concept
+  - A/B: shared secret S by doing ECDH then transforming the result
+    A->B: AB1 = KDF(Salt1, S)
+    B: verify AB1 == KDF(Salt1, S)
+    B -> A: AB2 = KDF(Salt2, S)
+    A: verify AB2 == KDF(Salt2, S)
+  - deniability?
+    - third party cannot verify authentication results without knowing S
+    - with private keys it becomes possible to figure out whether the exchange
+      succeeded however the entire process is able to be fabricated by one side
+      - for well-known Salt1 and Salt2, AB1 and AB2 can be trivially generated
+        without any knowledge or participation of the other side
+
+* Resources
+  - EFF large diceware wordlist has 7776 words
+    <https://www.eff.org/files/2016/07/18/eff_large_wordlist.txt> from <https://www.eff.org/dice>
+    - reduce this to 4096 words
+      - 4096 / 7776 = 128 / 243
+      - 7776 / 243 = 32
+      - split word list into 32 groups, choose first 128 words of each groupo
+
+* Definitions
+  - KDF(Salt, Value): key derivation function
+  - PS: permanent shared pre-secret derived from ECDH
+  - As, Bs: 4-digit base10 seed generated on A and B, respectively
+  - SS: shared seed computed from As and Bs
+  - AT, BT: time value precise to 1 minute as selected by A and B, respectively
+  - S(T): shared secret from PS, SS, and given time value T
+  - ABv, BAv: A -> B and B -> A verifiers sent over the wire, respectively
+  - WordEncode(V): truncate V as necessary, then encode to 5 words using wordlist
+  - Td: max acceptable T offset, probably 5 minutes
+
+* Process
+  - A, B compute PS = ECDH(Apriv, Bpub) or vice versa
+  - A, B generate As, Bs
+  - A, B generate AT, BT using current unix time precise to minute
+  - exchange As and Bs
+  - A, B generate SS = ((As << 1) | 1) * ((Bs << 1) | 1)
+    - guarantees at minimum 13 bits of entropy per side, one side cannot reduce
+      entropy below 13 bits
+    - generated the same for both sides
+  - perform on both sides (swap A and B as necessary)
+    - A computes shared secret S(TA) = Hash(PS || SS || TA)
+      - if asynchronous mode is desired, ditch time value
+        - TODO: possibly replace with something else?
+    - A computes check value ABv = KDF(Bpub, S(TA))
+    - A -> B: WordEncode(ABv)
+    - B verifies ABv by trying KDF(Bpub, S(T)) for T = TB .. (TB + Td)
+    - on failure, report
+
+* Ideas (old)
+  - send keys
+    - ephemeral key calculated as XOR(Hash(B || A), Hash(A || B)), where A and B
+      are bit sequences sent in initial message
+  - deniability
+    - Actually I have an idea: use 64b of the shared secret and 64 from the
+      challenge to generate a shared key. The response is the first 64b of a
+      well-known message (0..0) encrypted with the shared secret. It is trivial
+      to find much more keys that lead to exactly the same exchange. (iovoid)
