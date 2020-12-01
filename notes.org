@@ -1,4 +1,5 @@
 #+TITLE: Simple human-based identity verification (idverify)
+#+STARTUP: entitiespretty
 
 * Main idea
 a quick moderate-strength authentication for use by Humans
@@ -38,22 +39,24 @@ a quick moderate-strength authentication for use by Humans
 * Definitions
   - KDF(Salt, Value): key derivation function
   - PS: permanent shared pre-secret derived from ECDH
-  - As, Bs: 4-digit base10 seed generated on A and B, respectively
+  - RandU16(): random unsigned 16-bit value
+  - As, Bs: 5-digit base10 seed generated on A and B, respectively
+  - UT: current unix time in seconds
   - SS: shared seed computed from As and Bs
-  - AT, BT: time value precise to 1 minute as selected by A and B, respectively
+  - AT, BT: time value precise to 320 seconds as selected by A and B, respectively
   - S(T): shared secret from PS, SS, and given time value T
   - ABv, BAv: A -> B and B -> A verifiers sent over the wire, respectively
   - WordEncode(V): truncate V as necessary, then encode to 5 words using wordlist
-  - Td: max acceptable T offset, probably 5 minutes
+  - Td: max acceptable T offset, probably \pm1 window
 
 * Process
   - A, B compute PS = ECDH(Apriv, Bpub) or vice versa
-  - A, B generate As, Bs
-  - A, B generate AT, BT using current unix time precise to minute
+  - A, B generate AT, BT = floor(UT % 320 / 10)
+  - A, B generate As, Bs = ((RandU16() << 5) | T) % 1e5
   - exchange As and Bs
   - A, B generate SS = ((As << 1) | 1) * ((Bs << 1) | 1)
-    - guarantees at minimum 13 bits of entropy per side, one side cannot reduce
-      entropy below 13 bits
+    - guarantees at minimum 11 bits of entropy per side, one side cannot reduce
+      entropy below 11 bits
     - generated the same for both sides
   - perform on both sides (swap A and B as necessary)
     - A computes shared secret S(TA) = Hash(PS || SS || TA)
@@ -61,7 +64,7 @@ a quick moderate-strength authentication for use by Humans
         - TODO: possibly replace with something else?
     - A computes check value ABv = KDF(Bpub, S(TA))
     - A -> B: WordEncode(ABv)
-    - B verifies ABv by trying KDF(Bpub, S(T)) for T = TB .. (TB + Td)
+    - B verifies ABv by trying KDF(Bpub, S(T)) for T = (TB - Td) .. (TB + Td)
     - on failure, report
 
 * Ideas (old)
