@@ -49,7 +49,22 @@ a quick moderate-strength authentication for use by Humans
   - WordEncode(V): truncate V as necessary, then encode to 5 words using wordlist
   - Td: max acceptable T offset, probably \pm1 window
 
-* Process
+* Procedure
+  - the procedure is symmetric for both sides, assuming A is self below
+  - compute PS = ECDH(Apriv, Bpub)
+  - compute local time window T = floor(UT % 320 / 10)
+  - compute seed As = ((RandU16() << 5) | T) % 1e5
+  - send As, receive Bs
+  - compute SS = ((As << 1) | 1) * ((Bs << 1) | 1)
+    - guarantees at minimum 11 bits of entropy per side, one side cannot reduce
+      entropy below 11 bits
+    - generated the same for both sides
+  - compute shared secret S(T) = Hash(PS || SS || TA)
+  - compute check value ABv = KDF(Bpub, S(T))
+  - send ABv, receive BAv
+  - verify BAv == KDF(Apub, S(T)) for any T in (TA - Td) .. (TA + Td)
+
+* Procedure (old)
   - A, B compute PS = ECDH(Apriv, Bpub) or vice versa
   - A, B generate AT, BT = floor(UT % 320 / 10)
   - A, B generate As, Bs = ((RandU16() << 5) | T) % 1e5
