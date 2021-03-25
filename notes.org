@@ -1,4 +1,4 @@
-#+TITLE: Simple human-based identity verification (idverify)
+#+TITLE: Simple human-friendly identity verification (idverify)
 #+STARTUP: entitiespretty
 
 * Main idea
@@ -34,7 +34,7 @@ a quick moderate-strength authentication for use by Humans
     - reduce this to 4096 words
       - 4096 / 7776 = 128 / 243
       - 7776 / 243 = 32
-      - split word list into 32 groups, choose first 128 words of each groupo
+      - split word list into 32 groups, choose first 128 words of each group
 
 * Definitions
   - KDF(Salt, Value): key derivation function

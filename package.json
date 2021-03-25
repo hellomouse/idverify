@@ -1,0 +1,19 @@
+{
+  "name": "idverify",
+  "version": "0.1.0",
+  "description": "human-friendly authentication",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/hellomouse/idverify.git"
+  },
+  "author": "iczero, iovoid",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/hellomouse/idverify/issues"
+  },
+  "homepage": "https://github.com/hellomouse/idverify#readme"
+}
