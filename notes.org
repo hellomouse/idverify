@@ -38,31 +38,63 @@ a quick moderate-strength authentication for use by Humans
 
 * Definitions
   - KDF(Salt, Value): key derivation function
-  - PS: permanent shared pre-secret derived from ECDH
+  - ECDHSecret: permanent shared pre-secret derived from ECDH
   - RandU16(): random unsigned 16-bit value
-  - As, Bs: 5-digit base10 seed generated on A and B, respectively
-  - UT: current unix time in seconds
-  - SS: shared seed computed from As and Bs
-  - AT, BT: time value precise to 320 seconds as selected by A and B, respectively
-  - S(T): shared secret from PS, SS, and given time value T
-  - ABv, BAv: A -> B and B -> A verifiers sent over the wire, respectively
+  - Apriv, Bpub, Apub, Bpriv: private key of A and public key of B, and vice versa
+  - SeedA, SeedB: 5-digit base10 seed generated on A and B, respectively
+  - UnixTime: current unix time in seconds
+    - 64 bits, 8 bytes
+  - SeedShared: shared seed computed from SeedA and SeedB
+  - TimeWindowA, TimeWindowB: 8-minute time window as selected by A and B, respectively
+  - TimeSelectA, TimeSelectB: 5-bit value to select specific time interval, see
+    design choices section
+  - TimeA, TimeB: time value accurate to 15 seconds, used to compute shared secret
+  - S(T): shared secret from ECDHSecret, SeedShared, and given time value T
+  - VerifyAB, VerifyBA: A -> B and B -> A verifiers sent over the wire, respectively
   - WordEncode(V): truncate V as necessary, then encode to 5 words using wordlist
-  - Td: max acceptable T offset, probably \pm1 window
+  - TimeOffset: max acceptable window offset, probably 1
 
 * Procedure
   - the procedure is symmetric for both sides, assuming A is self below
-  - compute PS = ECDH(Apriv, Bpub)
-  - compute local time window T = floor(UT % 320 / 10)
-  - compute seed As = ((RandU16() << 5) | T) % 1e5
-  - send As, receive Bs
-  - compute SS = ((As << 1) | 1) * ((Bs << 1) | 1)
-    - guarantees at minimum 11 bits of entropy per side, one side cannot reduce
-      entropy below 11 bits
-    - generated the same for both sides
-  - compute shared secret S(T) = Hash(PS || SS || TA)
-  - compute check value ABv = KDF(Bpub, S(T))
-  - send ABv, receive BAv
-  - verify BAv == KDF(Apub, S(T)) for any T in (TA - Td) .. (TA + Td)
+  - todo: replace 480 with a variable
+  - compute ECDHSecret = ECDH(Apriv, Bpub)
+  - compute local time window TimeWindowA = UnixTime - (UnixTime % 480)
+  - compute local time selector TimeSelectA = floor((UnixTime % 480) / 15)
+  - compute local time TimeA = UnixTime - (UnixTime % 15)
+    - equivalent to TimeA = TimeWindowA + TimeSelectA * 15
+  - compute local seed SeedA = ((RandU16() << 5) | TimeSelectA) % 1e5
+  - send SeedA, receive SeedB
+  - compute shared seed SeedShared = ((SeedA >> 4) | 1) * ((SeedB >> 4) | 1)
+    - this is a 4-byte value
+  - compute remote time select value TimeSelectB = SeedB & 0b11111
+  - function for computing shared secret S(T) = Hash(ECDHSecret || SeedShared || T)
+    - is Hash() needed here? could directly feed concatenated result to KDF
+  - note: locally computed shared secret is S(TimeA)
+  - compute check value VerifyAB = KDF(Bpub, S(TimeA))
+  - send VerifyAB, receive VerifyBA
+  - verify VerifyBA == KDF(Apub, S(T))
+    - for offset in -TimeOffset to +TimeOffset (in case of 1, use -1, 0, +1)
+      - try verify with time T = TimeWindowA + (offset * 480) + (TimeSelectB * 15)
+
+* Design Choices TODO
+  - SharedSeed computation
+    - guarantees at minimum 11 bits of entropy per side, and one side cannot
+      reduce entropy for the exchange below 11 bits
+      - XOR could result in zeroing of one side's entropy by another
+    - results in same value at both sides
+    - shift seed left 5 bits to remove time selector value, then back one bit to
+      ensure LSB is 1
+  - Why is a seed needed?
+    - multiple exchanges may happen in the same time window, which could
+      potentially result in collisions
+    - this may happen if, for example, a shared key was used by an organization
+  - time selector value
+    - a 480 second (8 minute) window split into 32 intervals of 15 seconds each
+      - why? lcm(32, 60) = 480 seconds
+    - allows pinpointing a 15-second interval if the 8 minute window is known
+    - verification will try +/- one window to allow for at least 8 minutes
+      response time
+    - sent as part of seed, then recovered by the other side to resolve original timestamp
 
 * Procedure (old)
   - A, B compute PS = ECDH(Apriv, Bpub) or vice versa
